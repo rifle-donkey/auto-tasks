@@ -1,0 +1,161 @@
+# Podman Compose configuration for Automation Framework
+version: '3.8'
+
+services:
+  automation-scheduler:
+    build: .
+    image: automation-framework:latest
+    container_name: automation-scheduler
+    hostname: automation-scheduler
+    restart: unless-stopped
+    
+    environment:
+      # Framework configuration
+      - AUTOMATION_ENV=production
+      - LOG_LEVEL=INFO
+      - PYTHONPATH=/app
+      
+      # Scheduler configuration
+      - SCHEDULER_CHECK_INTERVAL=60
+      - MAX_CONCURRENT_TASKS=5
+      - TASK_TIMEOUT_DEFAULT=3600
+      
+      # IPAM configuration
+      - IPAM_BASE_URL=https://ipam.ikea.com
+      - IPAM_VERIFY_SSL=false
+      
+    volumes:
+      # Data persistence
+      - automation-data:/var/automation_file
+      - automation-logs:/var/log/automation
+      
+      # Configuration
+      - ./config:/app/config
+      - ~/.config:/home/automation/.config:ro
+      
+      # Git repositories
+      - ./git-repos:/app/git-repos
+      
+      # Custom schedules (optional)
+      - ./schedules.yml:/app/config/schedules.yml:ro
+      
+    networks:
+      - automation-network
+      
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "from automation_core.scheduler import TaskScheduler; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        labels: "automation.service=scheduler"
+
+  # Single task runner (for manual execution)
+  automation-runner:
+    build: .
+    image: automation-framework:latest
+    container_name: automation-runner
+    hostname: automation-runner
+    
+    environment:
+      - AUTOMATION_ENV=production
+      - LOG_LEVEL=INFO
+      - PYTHONPATH=/app
+      
+    volumes:
+      # Share volumes with scheduler
+      - automation-data:/var/automation_file
+      - automation-logs:/var/log/automation
+      - ./config:/app/config
+      - ~/.config:/home/automation/.config:ro
+      - ./git-repos:/app/git-repos
+      
+    networks:
+      - automation-network
+    
+    # Override entrypoint for manual task execution
+    entrypoint: ["python3", "task_entrypoint.py"]
+    command: ["--help"]
+    
+    # Don't restart automatically (for manual runs)
+    restart: "no"
+    
+    profiles:
+      - manual  # Only start when explicitly requested
+
+  # Optional: Web dashboard (future enhancement)
+  automation-dashboard:
+    build: .
+    image: automation-framework:latest
+    container_name: automation-dashboard
+    hostname: automation-dashboard
+    
+    environment:
+      - AUTOMATION_ENV=production
+      - DASHBOARD_PORT=8080
+      - PYTHONPATH=/app
+      
+    volumes:
+      - automation-data:/var/automation_file:ro
+      - automation-logs:/var/log/automation:ro
+      - ./config:/app/config:ro
+      
+    ports:
+      - "8080:8080"
+      
+    networks:
+      - automation-network
+    
+    # Override for dashboard service
+    entrypoint: ["python3", "dashboard.py"]
+    command: ["--port", "8080"]
+    
+    restart: unless-stopped
+    
+    profiles:
+      - dashboard  # Only start when dashboard profile is used
+
+# Named volumes for data persistence
+volumes:
+  automation-data:
+    name: automation-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.local/share/automation/data
+      
+  automation-logs:
+    name: automation-logs
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.local/share/automation/logs
+
+# Network for service communication
+networks:
+  automation-network:
+    name: automation-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

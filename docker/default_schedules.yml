@@ -1,0 +1,52 @@
+# Default task schedules for containerized deployment
+schedules:
+  # Hardware refresh tasks - during maintenance windows
+  hardware/refresh_ansible_hwinfo:
+    cron: "0 2 * * *"          # Daily at 2 AM
+    enabled: true
+    max_runtime: 3600          # 1 hour
+    retry_count: 2
+    config:
+      debug: false
+  
+  # Monitoring tasks - frequent execution
+  monitoring/console_health_monitor:
+    cron: "*/30 * * * *"       # Every 30 minutes
+    enabled: true
+    max_runtime: 600           # 10 minutes
+    retry_count: 2
+    config:
+      debug: false
+  
+  monitoring/dns_availability_monitor:
+    cron: "*/15 * * * *"       # Every 15 minutes
+    enabled: true
+    max_runtime: 300           # 5 minutes
+    retry_count: 1
+    config:
+      debug: false
+  
+  # Example additional tasks (when implemented)
+  hardware/refresh_palo_hwinfo:
+    cron: "0 3 * * *"          # Daily at 3 AM
+    enabled: false             # Disabled by default
+    max_runtime: 1800          # 30 minutes
+    retry_count: 2
+    
+  hardware/refresh_versa_hwinfo:
+    cron: "0 4 * * *"          # Daily at 4 AM
+    enabled: false             # Disabled by default
+    max_runtime: 1800          # 30 minutes
+    retry_count: 2
+  
+  discovery/mgmt_network_discovery:
+    cron: "0 6 * * 0"          # Weekly on Sunday at 6 AM
+    enabled: false             # Disabled by default
+    max_runtime: 7200          # 2 hours
+    retry_count: 1
+    
+  integration/lcm_eox_sync:
+    cron: "0 5 * * 1"          # Weekly on Monday at 5 AM
+    enabled: false             # Disabled by default
+    max_runtime: 3600          # 1 hour
+    retry_count: 2
